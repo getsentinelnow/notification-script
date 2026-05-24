@@ -1,0 +1,648 @@
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local SoundService = game:GetService("SoundService")
+local Debris = game:GetService("Debris")
+
+local LocalPlayer = Players.LocalPlayer
+
+-- Store players who already left once
+local LeftPlayers = {}
+
+---------------------------------------------------
+-- SOUNDS
+---------------------------------------------------
+
+local BubbleSound = Instance.new("Sound")
+BubbleSound.SoundId = "rbxassetid://6026984224"
+BubbleSound.Volume = 0.13
+BubbleSound.Parent = SoundService
+
+local RejoinSound = Instance.new("Sound")
+RejoinSound.SoundId = "rbxassetid://4764109000"
+RejoinSound.Volume = 0.13
+RejoinSound.Parent = SoundService
+
+---------------------------------------------------
+-- SETTINGS
+---------------------------------------------------
+
+local NOTIFICATION_WIDTH = 240
+local NOTIFICATION_HEIGHT = 60
+local PADDING = 8
+
+---------------------------------------------------
+-- GUI
+---------------------------------------------------
+
+local function getGui()
+
+    local gui = LocalPlayer.PlayerGui:FindFirstChild("NotificationGui")
+
+    if not gui then
+
+        gui = Instance.new("ScreenGui")
+        gui.Name = "NotificationGui"
+        gui.IgnoreGuiInset = false
+        gui.ResetOnSpawn = false
+        gui.Parent = LocalPlayer.PlayerGui
+
+    end
+
+    return gui
+end
+
+local Notifications = {}
+
+---------------------------------------------------
+-- SNOW EFFECT
+---------------------------------------------------
+
+local function createSnow(frame)
+
+    local snowContainer = Instance.new("Frame")
+    snowContainer.Parent = frame
+    snowContainer.Size = UDim2.new(1,0,1,0)
+    snowContainer.BackgroundTransparency = 1
+    snowContainer.ClipsDescendants = true
+
+    for i = 1, 5 do
+
+        task.spawn(function()
+
+            while frame.Parent do
+
+                local snow = Instance.new("Frame")
+                snow.Parent = snowContainer
+
+                local size = math.random(2,4)
+
+                snow.Size = UDim2.new(0,size,0,size)
+
+                snow.Position = UDim2.new(
+                    math.random(),
+                    0,
+                    -0.1,
+                    0
+                )
+
+                snow.BackgroundColor3 = Color3.fromRGB(255,255,255)
+                snow.BackgroundTransparency = 0.35
+                snow.BorderSizePixel = 0
+
+                Instance.new("UICorner", snow).CornerRadius = UDim.new(1,0)
+
+                local endX = snow.Position.X.Scale + math.random(-5,5)/100
+
+                TweenService:Create(
+                    snow,
+                    TweenInfo.new(
+                        math.random(30,45)/10,
+                        Enum.EasingStyle.Linear
+                    ),
+                    {
+                        Position = UDim2.new(
+                            endX,
+                            0,
+                            1.1,
+                            0
+                        ),
+                        BackgroundTransparency = 1
+                    }
+                ):Play()
+
+                Debris:AddItem(snow, 5)
+
+                task.wait(math.random(20,40)/100)
+
+            end
+        end)
+    end
+end
+
+---------------------------------------------------
+-- STACKING SYSTEM
+---------------------------------------------------
+
+local function updateStacking()
+
+    for i, frame in ipairs(Notifications) do
+
+        local spacingY = (NOTIFICATION_HEIGHT + PADDING) * (i - 1)
+
+        TweenService:Create(
+            frame,
+            TweenInfo.new(
+                0.28,
+                Enum.EasingStyle.Quart,
+                Enum.EasingDirection.Out
+            ),
+            {
+                Position = UDim2.new(
+                    0.5,
+                    -(NOTIFICATION_WIDTH / 2),
+                    0,
+                    50 + spacingY
+                )
+            }
+        ):Play()
+    end
+end
+
+---------------------------------------------------
+-- SOUND PLAYER
+---------------------------------------------------
+
+local function playSound(soundTemplate)
+
+    local soundClone = soundTemplate:Clone()
+    soundClone.Parent = SoundService
+    soundClone:Play()
+
+    Debris:AddItem(soundClone, 3)
+end
+
+---------------------------------------------------
+-- MAIN NOTIFICATION
+---------------------------------------------------
+
+local function notify(plr, action)
+
+    if action == "has rejoined the server." then
+        playSound(RejoinSound)
+    else
+        playSound(BubbleSound)
+    end
+
+    local gui = getGui()
+
+    local image
+
+    pcall(function()
+
+        image = Players:GetUserThumbnailAsync(
+            plr.UserId,
+            Enum.ThumbnailType.HeadShot,
+            Enum.ThumbnailSize.Size150x150
+        )
+
+    end)
+
+    if not image then
+        image = "rbxasset://textures/ui/GuiImagePlaceholder.png"
+    end
+
+    local frame = Instance.new("Frame")
+    frame.Parent = gui
+    frame.Size = UDim2.new(0, NOTIFICATION_WIDTH, 0, NOTIFICATION_HEIGHT)
+
+    ---------------------------------------------------
+    -- ACCOUNT AGE COLOR
+    ---------------------------------------------------
+
+    if plr.AccountAge < 30 then
+
+        -- Red for new accounts
+        frame.BackgroundColor3 = Color3.fromRGB(170, 45, 45)
+
+    else
+
+        -- Sunrise violet
+        frame.BackgroundColor3 = Color3.fromRGB(120, 70, 170)
+
+    end
+
+    frame.BackgroundTransparency = 0.9
+    frame.BorderSizePixel = 0
+
+    ---------------------------------------------------
+    -- OUTLINE
+    ---------------------------------------------------
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Parent = frame
+    stroke.Color = Color3.fromRGB(0,0,0)
+    stroke.Thickness = 3
+    stroke.Transparency = 0.1
+
+    frame.Position = UDim2.new(
+        0.5,
+        -(NOTIFICATION_WIDTH / 2),
+        0,
+        -100
+    )
+
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
+
+    createSnow(frame)
+
+    table.insert(Notifications, frame)
+    updateStacking()
+
+    ---------------------------------------------------
+    -- AVATAR
+    ---------------------------------------------------
+
+    local img = Instance.new("ImageLabel")
+    img.Parent = frame
+    img.BackgroundTransparency = 1
+
+    img.Size = UDim2.new(0, 38, 0, 38)
+    img.Position = UDim2.new(0, 10, 0.5, -19)
+
+    img.Image = image
+
+    Instance.new("UICorner", img).CornerRadius = UDim.new(1, 0)
+
+    ---------------------------------------------------
+    -- TEXT
+    ---------------------------------------------------
+
+    local label = Instance.new("TextLabel")
+    label.Parent = frame
+
+    label.Size = UDim2.new(1, -60, 1, 0)
+    label.Position = UDim2.new(0, 55, 0, 0)
+
+    label.BackgroundTransparency = 1
+
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.TextYAlignment = Enum.TextYAlignment.Center
+
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 15
+    label.TextColor3 = Color3.fromRGB(255,255,255)
+
+    label.TextStrokeTransparency = 0
+
+    if plr.AccountAge < 30 then
+        label.TextStrokeColor3 = Color3.fromRGB(80, 0, 0)
+    else
+        label.TextStrokeColor3 = Color3.fromRGB(60,20,90)
+    end
+
+    label.TextWrapped = true
+
+    label.Text = string.format(
+        "%s (@%s)\n%s\n[AGE: %d]",
+        plr.DisplayName,
+        plr.Name,
+        action,
+        plr.AccountAge
+    )
+
+    ---------------------------------------------------
+    -- SLIDE IN
+    ---------------------------------------------------
+
+    TweenService:Create(
+        frame,
+        TweenInfo.new(0.35, Enum.EasingStyle.Quad),
+        {
+            Position = UDim2.new(
+                0.5,
+                -(NOTIFICATION_WIDTH / 2),
+                0,
+                frame.Position.Y.Offset + 150
+            )
+        }
+    ):Play()
+
+    task.wait(4)
+
+    ---------------------------------------------------
+    -- SLIDE OUT RIGHT
+    ---------------------------------------------------
+
+    TweenService:Create(
+        frame,
+        TweenInfo.new(
+            0.5,
+            Enum.EasingStyle.Quint,
+            Enum.EasingDirection.Out
+        ),
+        {
+            Position = UDim2.new(
+                1.5,
+                0,
+                0,
+                frame.Position.Y.Offset
+            ),
+
+            BackgroundTransparency = 1
+        }
+    ):Play()
+
+    TweenService:Create(
+        label,
+        TweenInfo.new(0.25),
+        {
+            TextTransparency = 1
+        }
+    ):Play()
+
+    TweenService:Create(
+        img,
+        TweenInfo.new(0.25),
+        {
+            ImageTransparency = 1
+        }
+    ):Play()
+
+    task.wait(0.4)
+
+    for i, f in ipairs(Notifications) do
+
+        if f == frame then
+
+            table.remove(Notifications, i)
+            break
+
+        end
+    end
+
+    frame:Destroy()
+    updateStacking()
+end
+
+---------------------------------------------------
+-- PLAYER JOIN / LEAVE
+---------------------------------------------------
+
+Players.PlayerAdded:Connect(function(plr)
+
+    if LeftPlayers[plr.UserId] then
+        notify(plr, "has rejoined the server.")
+    else
+        notify(plr, "has joined the server.")
+    end
+
+end)
+
+Players.PlayerRemoving:Connect(function(plr)
+
+    LeftPlayers[plr.UserId] = true
+
+    notify(plr, "has left the server.")
+
+end)
+
+task.wait(3)
+notify(LocalPlayer, "created this script.")
+
+---------------------------------------------------
+-- DEATH NOTIFICATION
+---------------------------------------------------
+
+local function createDeathNotification(plr)
+
+    local gui = getGui()
+
+    playSound(BubbleSound)
+
+    local frame = Instance.new("Frame")
+    frame.Parent = gui
+
+    frame.Size = UDim2.new(0, 220, 0, 45)
+    frame.Position = UDim2.new(1, 250, 0, 120)
+
+    frame.BackgroundColor3 = Color3.fromRGB(140, 85, 190)
+    frame.BackgroundTransparency = 0.9
+    frame.BorderSizePixel = 0
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Parent = frame
+    stroke.Color = Color3.fromRGB(0,0,0)
+    stroke.Thickness = 3
+    stroke.Transparency = 0.1
+
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
+
+    createSnow(frame)
+
+    local label = Instance.new("TextLabel")
+    label.Parent = frame
+
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 15
+
+    label.TextColor3 = Color3.fromRGB(255,255,255)
+
+    label.TextStrokeTransparency = 0
+    label.TextStrokeColor3 = Color3.fromRGB(60,20,90)
+
+    label.Text = "💀 "..plr.Name.." reset"
+
+    label.TextWrapped = true
+
+    TweenService:Create(
+        frame,
+        TweenInfo.new(0.35, Enum.EasingStyle.Quad),
+        {
+            Position = UDim2.new(1, -230, 0, 120)
+        }
+    ):Play()
+
+    task.wait(5)
+
+    TweenService:Create(
+        frame,
+        TweenInfo.new(
+            0.5,
+            Enum.EasingStyle.Quint,
+            Enum.EasingDirection.Out
+        ),
+        {
+            Position = UDim2.new(
+                1.5,
+                0,
+                0,
+                120
+            ),
+
+            BackgroundTransparency = 1
+        }
+    ):Play()
+
+    TweenService:Create(
+        label,
+        TweenInfo.new(0.25),
+        {
+            TextTransparency = 1
+        }
+    ):Play()
+
+    task.wait(0.4)
+
+    frame:Destroy()
+end
+
+---------------------------------------------------
+-- RESPAWN NOTIFICATION
+---------------------------------------------------
+
+local function createRespawnNotification(plr)
+
+    local gui = getGui()
+
+    playSound(BubbleSound)
+
+    local frame = Instance.new("Frame")
+    frame.Parent = gui
+
+    frame.Size = UDim2.new(0, 220, 0, 45)
+
+    frame.Position = UDim2.new(1, 250, 0, 175)
+
+    frame.BackgroundColor3 = Color3.fromRGB(160, 100, 220)
+    frame.BackgroundTransparency = 0.9
+    frame.BorderSizePixel = 0
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Parent = frame
+    stroke.Color = Color3.fromRGB(0,0,0)
+    stroke.Thickness = 3
+    stroke.Transparency = 0.1
+
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
+
+    createSnow(frame)
+
+    local label = Instance.new("TextLabel")
+    label.Parent = frame
+
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 15
+
+    label.TextColor3 = Color3.fromRGB(255,255,255)
+
+    label.TextStrokeTransparency = 0
+    label.TextStrokeColor3 = Color3.fromRGB(60,20,90)
+
+    label.Text = "✨ "..plr.Name.." respawned"
+
+    label.TextWrapped = true
+
+    TweenService:Create(
+        frame,
+        TweenInfo.new(0.35, Enum.EasingStyle.Quad),
+        {
+            Position = UDim2.new(1, -230, 0, 175)
+        }
+    ):Play()
+
+    task.wait(5)
+
+    TweenService:Create(
+        frame,
+        TweenInfo.new(
+            0.5,
+            Enum.EasingStyle.Quint,
+            Enum.EasingDirection.Out
+        ),
+        {
+            Position = UDim2.new(
+                1.5,
+                0,
+                0,
+                175
+            ),
+
+            BackgroundTransparency = 1
+        }
+    ):Play()
+
+    TweenService:Create(
+        label,
+        TweenInfo.new(0.25),
+        {
+            TextTransparency = 1
+        }
+    ):Play()
+
+    task.wait(0.4)
+
+    frame:Destroy()
+end
+
+---------------------------------------------------
+-- PLAYER DEATH / RESET DETECTION
+---------------------------------------------------
+
+local ConnectedHumanoids = {}
+
+local function connectHumanoid(plr, humanoid)
+
+    if ConnectedHumanoids[humanoid] then
+        return
+    end
+
+    ConnectedHumanoids[humanoid] = true
+
+    humanoid.Died:Connect(function()
+
+        createDeathNotification(plr)
+
+    end)
+end
+
+local function monitorCharacter(plr, character)
+
+    for _, obj in ipairs(character:GetChildren()) do
+
+        if obj:IsA("Humanoid") then
+            connectHumanoid(plr, obj)
+        end
+    end
+
+    character.ChildAdded:Connect(function(obj)
+
+        if obj:IsA("Humanoid") then
+            connectHumanoid(plr, obj)
+        end
+    end)
+end
+
+---------------------------------------------------
+-- PLAYER SETUP
+---------------------------------------------------
+
+local function setupPlayer(plr)
+
+    if plr.Character then
+        monitorCharacter(plr, plr.Character)
+    end
+
+    plr.CharacterAdded:Connect(function(character)
+
+        task.wait(1)
+
+        createRespawnNotification(plr)
+
+        monitorCharacter(plr, character)
+
+    end)
+end
+
+---------------------------------------------------
+-- EXISTING PLAYERS
+---------------------------------------------------
+
+for _, plr in ipairs(Players:GetPlayers()) do
+    setupPlayer(plr)
+end
+
+---------------------------------------------------
+-- NEW PLAYERS
+---------------------------------------------------
+
+Players.PlayerAdded:Connect(function(plr)
+
+    setupPlayer(plr)
+
+end)
